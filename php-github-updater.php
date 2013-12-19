@@ -37,16 +37,96 @@ class PhpGithubUpdater {
         $this->user       = $user;
         $this->repository = $repository;
         $this->server     = $server;
-        $this->remoteTags = false;
+        $this->remoteTags = $this->getRemoteTags();
     }
 
+    /**
+     * Return the list of tags from the remote (in the Github API v3 format)
+     * See: http://developer.github.com/v3/repos/#list-tags
+     * @return array list of tags and their information
+     */
     public function getRemoteTags() {
         //load tags only once
-        if($this->remoteTags === false) {
+        if(!isset($this->remoteTags)) {
             $url = $this->server.'repos/'.$this->user.'/'.$this->repository.'/tags';
-            $this->remoteTags = json_decode(file_get_contents( $url ));
+            $remoteTags = json_decode(file_get_contents( $url ), true);
+
+            $this->remoteTags = array();
+            foreach($remoteTags as $key => $tag) {
+                $this->remoteTags[$tag['name']] = $tag;
+            }
         }
         return $this->remoteTags;
+    }
+
+    /**
+     * Get the remote version number preceding (older than) the given one
+     * @param  string $version version number (doesn't have to exist on remote)
+     * @return string          previous version number
+     */
+    public function getPreviousVersion($version) {
+        //TODO
+    }
+
+    /**
+     * Get the remote version number following (more recent) the given one
+     * @param  string $version version number (doesn't have to exist on remote)
+     * @return string          next version number
+     */
+    public function getNextVersion($version) {
+        //TODO
+    }
+
+    /**
+     * Return the latest remote version number
+     * @return string version number
+     */
+    public function getLastVersion() {
+        reset($this->remoteTags);
+        $latest = current($this->remoteTags);
+        return $latest['name'];
+    }
+
+    /**
+     * Get zipball link for the given version
+     * @param  string $version version number
+     * @return string          URL to zipball
+     */
+    public function getZipball($version) {
+        return isset($this->remoteTags[$version])?$this->remoteTags[$version]['zipball_url']:false;
+    }
+
+    /**
+     * Get tarball link for the given version
+     * @param  string $version version number
+     * @return string          URL to tarball
+     */
+    public function getTarball($version) {
+        return isset($this->remoteTags[$version])?$this->remoteTags[$version]['tarball_url']:false;
+    }
+
+    /**
+     * Check if given version is up-to-date with the remote
+     * @param  string  $version version number
+     * @return boolean          true if $version >= latest remote version
+     */
+    public function isUpToDate($version) {
+        reset($this->remoteTags);
+        $latest = current($this->remoteTags);
+        return ($this->compareVersions($version, $latest['name']) >= 0);
+    }
+
+    /**
+     * Compare two version numbers (based on PHP-standardized version numbers)
+     * See http://php.net/manual/en/function.version-compare.php
+     * @param  string  $version1 first version number
+     * @param  string  $version2 second version number
+     * @return integer           $version1 < $version2 => -1
+     *                           $version1 = $version2 => 0
+     *                           $version1 > $version2 => 1
+     */
+    public function compareVersions($version1, $version2) {
+        return version_compare($version1, $version2);
     }
 }
 
