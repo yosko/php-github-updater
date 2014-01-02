@@ -164,3 +164,5 @@ Exemple of how it works by default: ```v1-anyOtherString``` &lt; ```v1-dev``` &l
 PHP Github Updater was written by [Yosko](http://www.yosko.net), all rights reserved. It is distributed under the  [GNU LGPL](http://www.gnu.org/licenses/lgpl.html) license.
 
 ## Changelog
+
+* v1 (2014-01-02): initial version
