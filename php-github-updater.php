@@ -57,18 +57,24 @@ class PhpGithubUpdater {
     /**
      * Perform download and installation of the given version
      * /!\ WARNING: you should do a backup before calling this method
-     * @param  string $version       version to install
-     * @param  string $root          path where the version will be installed
-     * @param  string $tempDirectory path where the version could be downloaded and extracted before install
-     * @return string                execution status
+     * @param  string  $version       version to install
+     * @param  string  $root          path where the version will be installed
+     * @param  string  $tempDirectory path where the version could be downloaded and extracted before install
+     * @return boolean                execution status
      */
     public function installVersion($version, $root, $tempDirectory) {
         $archive = $this->downloadVersion($version, $tempDirectory);
         $extractDir = $this->extractArchive($archive);
-        return $this->moveFilesRecursive(
+        $result = $this->moveFilesRecursive(
             $tempDirectory.DIRECTORY_SEPARATOR.$extractDir,
             $root
         );
+
+        if(!$result) {
+            throw new PguOverwriteException("Overwriting failed while installing. You might need to restore a backup of your application.");
+        }
+
+        return $result;
     }
 
     /**
@@ -88,12 +94,18 @@ class PhpGithubUpdater {
         }
 
         if(!copy( $url, $archive)) {
-            //TODO: raise exception
+            throw new PguDownloadException("Download failed.");
         }
 
         return $archive;
     }
 
+    /**
+     * Extract the content 
+     * @param  string $path archive path
+     * @return string       name (not path!) of the subdirectory where files where extracted
+     *                      should look like <user>-<repository>-<lastCommitHash>
+     */
     public function extractArchive($path) {
         $archive = basename($path);
         $directory = '';
@@ -114,8 +126,7 @@ class PhpGithubUpdater {
             $phar->extractTo( dirname($path), null, true );
             // chmod($path, 0755);
         } catch (Exception $e) {
-            var_dump($e);
-            //TODO: raise exception
+            throw new PguExtractException("Archive extraction failed. The file might be corrupted and you should download it again.");
             return false;
         }
 
@@ -267,5 +278,9 @@ class PhpGithubUpdater {
         return version_compare($version1, $version2);
     }
 }
+
+class PguDownloadException extends Exception {}
+class PguExtractException extends Exception {}
+class PguOverwriteException extends Exception {}
 
 ?>
