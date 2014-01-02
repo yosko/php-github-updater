@@ -7,28 +7,46 @@ It will check the tags on Github and compare it with your current version number
 
 ## Requirements
 
-1. Github API v3 compatible
+1. PHP 5.3 or above
 2. Apache's ```ssl_module``` and PHP's ```php_openssl``` to access Github in https
 3. Write access on your directories to download an archive and uncompress it
+4. Github API v3 compatible
 
 ## Use
 
-* You'll only need one file: ```php-github-updater.class.php```
-* Example of use:
+### Example
+
+You'll only need one file: ```php-github-updater.class.php```
 
     require_once('php-github-updater.class.php');
     $user = 'yosko';
     $repository = 'jotter';
     $localVersion = 'v0.2';
+    
     $updater = new PhpGithubUpdater($user, $repository);
     if( !$updater->isUpToDate($localVersion) ) {
-        $updater->downloadLatestVersion();
+        $updater->installLatestVersion(
+            '/path/to/app/root',
+            '/temporary/download/path',
+        );
     }
 
-Notes:
-* You shouldn't call this each time a page loads in your project because it access Github remotely.
-* The current version doesn't need to exist on Github
-* There MUST be at least one tag on Github?
+Explanation:
+
+1. ```new PhpGithubUpdater()``` will fetch Github for a list of available version numbers
+2. ```isUpToDate()``` checks if current version is equal to the latest
+3. ```installLatestVersion()``` downloads, extracts and installs the latest version from Github
+
+### Recommandations
+
+* Always do a backup of your installation before overwriting it!
+* You shouldn't call ```PhpGithubUpdater``` each time a page loads in your project because it access Github remotely.
+
+### Documentation
+
+If you would rather do it step by step all by yourself, here is the class documentation. All methods are public:
+
+...
 
 ## Licence
 

@@ -43,52 +43,42 @@ class PhpGithubUpdater {
     }
 
     /**
-     * Return the list of tags from the remote (in the Github API v3 format)
-     * See: http://developer.github.com/v3/repos/#list-tags
-     * @return array list of tags and their information
+     * Perform download and installation of the latest version
+     * /!\ WARNING: you should do a backup before calling this method
+     * @param  string $root          path where the version will be installed
+     * @param  string $tempDirectory path where the version could be downloaded and extracted before install
+     * @return string                execution status
      */
-    public function getRemoteTags() {
-        //load tags only once
-        if(!isset($this->remoteTags)) {
-            $url = $this->server.'repos/'.$this->user.'/'.$this->repository.'/tags';
-            $remoteTags = json_decode(file_get_contents( $url ), true);
-
-            $this->remoteTags = array();
-            foreach($remoteTags as $key => $tag) {
-                $this->remoteTags[$tag['name']] = $tag;
-            }
-        }
-        return $this->remoteTags;
+    public function installLatestVersion($root, $tempDirectory) {
+        $version = $this->getLatestVersion();
+        return $this->installVersion($version, $root, $tempDirectory);
     }
 
     /**
-     * Get the remote version number following (more recent) the given one
-     * @param  string $version version number (doesn't have to exist on remote)
-     * @return string          next version number
+     * Perform download and installation of the given version
+     * /!\ WARNING: you should do a backup before calling this method
+     * @param  string $version       version to install
+     * @param  string $root          path where the version will be installed
+     * @param  string $tempDirectory path where the version could be downloaded and extracted before install
+     * @return string                execution status
      */
-    public function getNextVersion($version) {
-        //TODO
+    public function installVersion($version, $root, $tempDirectory) {
+        $archive = $this->downloadVersion($version, $tempDirectory);
+        $extractDir = $this->extractArchive($archive);
+        return $this->moveFilesRecursive(
+            $tempDirectory.DIRECTORY_SEPARATOR.$extractDir,
+            $root
+        );
     }
 
     /**
-     * Return the latest remote version number
-     * @return string version number
-     */
-    public function getLastVersion() {
-        reset($this->remoteTags);
-        $latest = current($this->remoteTags);
-        return $latest['name'];
-    }
-
-    /**
-     * Download archive for the latest version directly from Github
+     * Download archive for the given version directly from Github
      * @param  string $destDirectory path to the directory where the archive will be saved
      * @param  string $extension     file extension (default: '.zip', other choice : '.tar.gz')
      * @return misc                  FALSE on failure, path to archive on success
      */
-    public function downloadLatestVersion($destDirectory, $extension = '.zip') {
+    public function downloadVersion($version, $destDirectory, $extension = '.zip') {
         $this->archiveExtension = $extension;
-        $version = $this->getLastVersion();
         $archive = $destDirectory.DIRECTORY_SEPARATOR.$version.$this->archiveExtension;
 
         if($this->archiveExtension == '.zip') {
@@ -97,10 +87,9 @@ class PhpGithubUpdater {
             $url = $this->getTarballUrl( $version );
         }
 
-        //TODO: remove this temporary tweak for coding behind a proxy
-        // if(!copy( $url, $archive)) {
+        if(!copy( $url, $archive)) {
             //TODO: raise exception
-        // }
+        }
 
         return $archive;
     }
@@ -149,8 +138,6 @@ class PhpGithubUpdater {
         Phar::unlinkArchive($path); //delete archive
 
         return $directory;
-
-        //TODO: in another function, move all files to project root, then delete empty source directory
     }
 
     /**
@@ -172,7 +159,7 @@ class PhpGithubUpdater {
                 if (in_array($file, array(".",".."))) continue;
 
                 if(is_dir($source.DIRECTORY_SEPARATOR.$file)) {
-                    $result = $this->moveDirectoryRecursive(
+                    $result = $this->moveFilesRecursive(
                         $source.DIRECTORY_SEPARATOR.$file,
                         $destination.DIRECTORY_SEPARATOR.$file
                     );
@@ -188,16 +175,47 @@ class PhpGithubUpdater {
             }
         }
 
+        rmdir($source);
+
         return $result;
     }
 
-    public function installVersion($version, $root, $tempDirectory) {
-        //TODO: backup version before overwriting?
+    /**
+     * Return the list of tags from the remote (in the Github API v3 format)
+     * See: http://developer.github.com/v3/repos/#list-tags
+     * @return array list of tags and their information
+     */
+    public function getRemoteTags() {
+        //load tags only once
+        if(!isset($this->remoteTags)) {
+            $url = $this->server.'repos/'.$this->user.'/'.$this->repository.'/tags';
+            $remoteTags = json_decode(file_get_contents( $url ), true);
 
+            $this->remoteTags = array();
+            foreach($remoteTags as $key => $tag) {
+                $this->remoteTags[$tag['name']] = $tag;
+            }
+        }
+        return $this->remoteTags;
     }
 
-    public function installLatestVersion($root, $tempDirectory) {
+    /**
+     * Get the remote version number following (more recent) the given one
+     * @param  string $version version number (doesn't have to exist on remote)
+     * @return string          next version number
+     */
+    public function getNextVersion($version) {
+        //TODO
+    }
 
+    /**
+     * Return the latest remote version number
+     * @return string version number
+     */
+    public function getLatestVersion() {
+        reset($this->remoteTags);
+        $latest = current($this->remoteTags);
+        return $latest['name'];
     }
 
     /**
