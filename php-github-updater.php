@@ -202,10 +202,17 @@ class PhpGithubUpdater {
     /**
      * Get the remote version number following (more recent) the given one
      * @param  string $version version number (doesn't have to exist on remote)
-     * @return string          next version number
+     * @return string          next version number (or false if no result)
      */
     public function getNextVersion($version) {
-        //TODO
+        $nextVersion = false;
+        foreach($this->remoteTags as $tag) {
+            if($this->compareVersions($version, $tag['name']) < 0) {
+                $nextVersion = $tag['name'];
+                break;
+            }
+        }
+        return $nextVersion;
     }
 
     /**
