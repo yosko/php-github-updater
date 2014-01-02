@@ -24,7 +24,8 @@ class PhpGithubUpdater {
         $server,
         $user,
         $repository,
-        $remoteTags;
+        $remoteTags,
+        $archiveExtension;
 
     /**
      * Init the updater with remote repository information
@@ -34,10 +35,11 @@ class PhpGithubUpdater {
      *                           useful for Github Enterprise using Github API v3
      */
     public function __construct($user, $repository, $server = 'https://api.github.com/') {
-        $this->user       = $user;
-        $this->repository = $repository;
-        $this->server     = $server;
-        $this->remoteTags = $this->getRemoteTags();
+        $this->user             = $user;
+        $this->repository       = $repository;
+        $this->server           = $server;
+        $this->remoteTags       = $this->getRemoteTags();
+        $this->archiveExtension = '.zip';
     }
 
     /**
@@ -60,15 +62,6 @@ class PhpGithubUpdater {
     }
 
     /**
-     * Get the remote version number preceding (older than) the given one
-     * @param  string $version version number (doesn't have to exist on remote)
-     * @return string          previous version number
-     */
-    public function getPreviousVersion($version) {
-        //TODO
-    }
-
-    /**
      * Get the remote version number following (more recent) the given one
      * @param  string $version version number (doesn't have to exist on remote)
      * @return string          next version number
@@ -88,11 +81,131 @@ class PhpGithubUpdater {
     }
 
     /**
+     * Download archive for the latest version directly from Github
+     * @param  string $destDirectory path to the directory where the archive will be saved
+     * @param  string $extension     file extension (default: '.zip', other choice : '.tar.gz')
+     * @return misc                  FALSE on failure, path to archive on success
+     */
+    public function downloadLatestVersion($destDirectory, $extension = '.zip') {
+        $this->archiveExtension = $extension;
+        $version = $this->getLastVersion();
+        $archive = $destDirectory.DIRECTORY_SEPARATOR.$version.$this->archiveExtension;
+
+        if($this->archiveExtension == '.zip') {
+            $url = $this->getZipballUrl( $version );
+        } elseif($this->archiveExtension == '.tar.gz') {
+            $url = $this->getTarballUrl( $version );
+        }
+
+        //TODO: remove this temporary tweak for coding behind a proxy
+        // if(!copy( $url, $archive)) {
+            //TODO: raise exception
+        // }
+
+        return $archive;
+    }
+
+    public function extractArchive($path) {
+        $archive = basename($path);
+        $directory = '';
+
+        //uncompress from GZ
+        if($this->archiveExtension == '.tar.gz') {
+            $p = new PharData($path);
+            $p->decompress();
+            unset($p);
+            Phar::unlinkArchive($path);
+            $p->unlinkArchive($path);
+            $path = substr($path, 0, strlen($path-3)); //point to .tar
+        }
+
+        //extract ZIP or TAR (and overwrite if necessary)
+        try {
+            $phar = new PharData($path);
+            $phar->extractTo( dirname($path), null, true );
+            // chmod($path, 0755);
+        } catch (Exception $e) {
+            var_dump($e);
+            //TODO: raise exception
+            return false;
+        }
+
+        //find the new subdirectory name
+        $file = new RecursiveIteratorIterator($phar);
+        $directory = $file->getPathName();
+        $directory = substr(
+            $directory,
+            strpos(
+                $directory,
+                $archive
+            ) + strlen($archive) + 1
+        );
+        if(strpos($directory, DIRECTORY_SEPARATOR)) {
+            $directory = substr($directory, 0, strpos($directory, DIRECTORY_SEPARATOR));
+        }
+
+        unset($file);
+        unset($phar);
+        Phar::unlinkArchive($path); //delete archive
+
+        return $directory;
+
+        //TODO: in another function, move all files to project root, then delete empty source directory
+    }
+
+    /**
+     * Recursively move all files from $source directory into $destination directory
+     * @param  string  $source      source directory from which files and subdirectories will be taken
+     * @param  string  $destination destination directory where files and subdirectories will be put
+     * @return boolean              execution status
+     */
+    public function moveFilesRecursive($source, $destination) {
+        $result = true;
+
+        if(file_exists($source) && is_dir($source)) {
+            if(!file_exists($destination)) {
+                mkdir($destination);
+            }
+
+            $files = scandir($source);
+            foreach ($files as $file) {
+                if (in_array($file, array(".",".."))) continue;
+
+                if(is_dir($source.DIRECTORY_SEPARATOR.$file)) {
+                    $result = $this->moveDirectoryRecursive(
+                        $source.DIRECTORY_SEPARATOR.$file,
+                        $destination.DIRECTORY_SEPARATOR.$file
+                    );
+                } else {
+                    $result = copy(
+                        $source.DIRECTORY_SEPARATOR.$file,
+                        $destination.DIRECTORY_SEPARATOR.$file
+                    );
+                    unlink($source.DIRECTORY_SEPARATOR.$file);
+                }
+
+                if(!$result) break;
+            }
+        }
+
+        return $result;
+    }
+
+    public function installVersion($version, $root, $tempDirectory) {
+        //TODO: backup version before overwriting?
+
+    }
+
+    public function installLatestVersion($root, $tempDirectory) {
+
+    }
+
+    /**
      * Get zipball link for the given version
      * @param  string $version version number
      * @return string          URL to zipball
      */
-    public function getZipball($version) {
+    public function getZipballUrl($version) {
         return isset($this->remoteTags[$version])?$this->remoteTags[$version]['zipball_url']:false;
     }
 
@@ -101,7 +214,7 @@ class PhpGithubUpdater {
      * @param  string $version version number
      * @return string          URL to tarball
      */
-    public function getTarball($version) {
+    public function getTarballUrl($version) {
         return isset($this->remoteTags[$version])?$this->remoteTags[$version]['tarball_url']:false;
     }
 

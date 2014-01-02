@@ -9,13 +9,23 @@ It will check the tags on Github and compare it with your current version number
 
 1. Github API v3 compatible
 2. Apache's ```ssl_module``` and PHP's ```php_openssl``` to access Github in https
+3. Write access on your directories to download an archive and uncompress it
 
 ## Use
 
-* You'll only need one file (```php-github-updater.class.php```). Include it in your code.
-* ...
+* You'll only need one file: ```php-github-updater.class.php```
+* Example of use:
 
-Notes
+    require_once('php-github-updater.class.php');
+    $user = 'yosko';
+    $repository = 'jotter';
+    $localVersion = 'v0.2';
+    $updater = new PhpGithubUpdater($user, $repository);
+    if( !$updater->isUpToDate($localVersion) ) {
+        $updater->downloadLatestVersion();
+    }
+
+Notes:
 * You shouldn't call this each time a page loads in your project because it access Github remotely.
 * The current version doesn't need to exist on Github
 * There MUST be at least one tag on Github?
