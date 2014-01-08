@@ -328,6 +328,26 @@ class PhpGithubUpdater {
     }
 
     /**
+     * Get the title of a release
+     * @param  string $version release version number
+     * @return string          title
+     */
+    public function getTitle($version) {
+        $this->getReleases();
+        return isset($this->releases[$version]['name'])?$this->releases[$version]['name']:'';
+    }
+
+    /**
+     * Get the description of a release
+     * @param  string $version release version number
+     * @return string          description (in Markdown syntax format)
+     */
+    public function getdescription($version) {
+        $this->getReleases();
+        return isset($this->releases[$version]['body'])?$this->releases[$version]['body']:'';
+    }
+
+    /**
      * Check if given version is up-to-date with the remote
      * @param  string  $version version number
      * @return boolean          true if $version >= latest remote version
