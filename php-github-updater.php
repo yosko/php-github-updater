@@ -38,8 +38,8 @@ class PhpGithubUpdater {
         $this->user             = $user;
         $this->repository       = $repository;
         $this->server           = $server;
-        $this->remoteTags       = $this->getRemoteTags();
         $this->archiveExtension = '.zip';
+        $this->remoteTags       = false;
     }
 
     /**
@@ -198,9 +198,9 @@ class PhpGithubUpdater {
      */
     public function getRemoteTags() {
         //load tags only once
-        if(!isset($this->remoteTags)) {
+        if(empty($this->remoteTags) && !is_array($this->remoteTags)) {
             $url = $this->server.'repos/'.$this->user.'/'.$this->repository.'/tags';
-            $remoteTags = json_decode(file_get_contents( $url ), true);
+            $remoteTags = json_decode($this->getContentFromGithub( $url ), true);
 
             $this->remoteTags = array();
             foreach($remoteTags as $key => $tag) {
@@ -216,6 +216,7 @@ class PhpGithubUpdater {
      * @return string          next version number (or false if no result)
      */
     public function getNextVersion($version) {
+        $this->getRemoteTags();
         $nextVersion = false;
         foreach($this->remoteTags as $tag) {
             if($this->compareVersions($version, $tag['name']) < 0) {
@@ -231,6 +232,7 @@ class PhpGithubUpdater {
      * @return string version number
      */
     public function getLatestVersion() {
+        $this->getRemoteTags();
         reset($this->remoteTags);
         $latest = current($this->remoteTags);
         return $latest['name'];
@@ -242,6 +244,7 @@ class PhpGithubUpdater {
      * @return string          URL to zipball
      */
     public function getZipballUrl($version) {
+        $this->getRemoteTags();
         return isset($this->remoteTags[$version])?$this->remoteTags[$version]['zipball_url']:false;
     }
 
@@ -251,6 +254,7 @@ class PhpGithubUpdater {
      * @return string          URL to tarball
      */
     public function getTarballUrl($version) {
+        $this->getRemoteTags();
         return isset($this->remoteTags[$version])?$this->remoteTags[$version]['tarball_url']:false;
     }
 
@@ -260,6 +264,7 @@ class PhpGithubUpdater {
      * @return boolean          true if $version >= latest remote version
      */
     public function isUpToDate($version) {
+        $this->getRemoteTags();
         reset($this->remoteTags);
         $latest = current($this->remoteTags);
         return ($this->compareVersions($version, $latest['name']) >= 0);
@@ -276,6 +281,50 @@ class PhpGithubUpdater {
      */
     public function compareVersions($version1, $version2) {
         return version_compare($version1, $version2);
+    }
+
+    /**
+     * Perform a request to Github API
+     * @param  string $url URL to get
+     * @return string      Github's response
+     */
+    public function getContentFromGithub($url, $path = false) {
+        //use curl if possible
+        if(function_exists('curl_version')) {
+            $ch = curl_init();
+            curl_setopt($ch,CURLOPT_URL,$url);
+            curl_setopt($ch, CURLOPT_FOLLOWLOCATION, 1);
+            curl_setopt($ch,CURLOPT_RETURNTRANSFER,1); 
+            curl_setopt($ch,CURLOPT_CONNECTTIMEOUT,5);
+            curl_setopt($ch, CURLOPT_USERAGENT, 'php-github-updater');
+            if($this->proxy !== false) {
+                curl_setopt($ch, CURLOPT_PROXY, $this->proxy);
+            }
+            if($path !== false) {
+                if(!file_exists(dirname($path))) {
+                    mkdir(dirname($path));
+                }
+                touch($path);
+                $file = fopen($path,'w+');
+                curl_setopt($ch, CURLOPT_FILE, $file); 
+                curl_setopt($ch, CURLOPT_HEADER, 0); 
+            }
+            $content = curl_exec($ch);
+            curl_close($ch);
+            if($path !== false) {
+                fclose($file);
+            }
+
+        //fallback - might raise a warning with proxies
+        } else {
+            $content = file_get_contents( $url );
+        }
+
+        if(empty($content)) {
+            throw new PguRemoteException("Fetch data from Github failed. You might be behind a proxy.");
+        }
+
+        return $content;
     }
 }
 
